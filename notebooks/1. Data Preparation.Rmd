@@ -1,0 +1,1007 @@
+---
+jupyter:
+  jupytext:
+    formats: ipynb,Rmd
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.16.3
+  kernelspec:
+    display_name: Python 3 (ipykernel)
+    language: python
+    name: python3
+---
+
+```{python editable=TRUE, slideshow={'slide_type': ''}}
+# %matplotlib inline
+import pandas as pd
+import numpy as np
+```
+
+---
+
+
+# Data Preparation using pandas
+
+An initial step in statistical data analysis is the preparation of the data to be used in the analysis. In practice, ~~a little~~ ~~some~~ ~~much~~ the majority of the actual time spent on a statistical modeling project is typically devoted to importing, cleaning, validating and transforming the dataset.
+
+This section will introduce [pandas](http://pandas.pydata.org/), an important third-party Python package for data analysis, as a tool for data preparation, and provide some general advice for what should or should not be done to data before it is analyzed.
+
+<!-- #region -->
+## Introduction to pandas
+
+**pandas** is a Python package providing fast, flexible, and expressive data structures designed to work with *relational* or *labeled* data both. It is a fundamental high-level building block for doing practical, real world data analysis in Python. 
+
+pandas is well suited for:
+
+- **Tabular** data with heterogeneously-typed columns, as you might find in an SQL table or Excel spreadsheet
+- Ordered and unordered (not necessarily fixed-frequency) **time series** data.
+- Arbitrary **matrix** data with row and column labels
+
+Virtually any statistical dataset, labeled or unlabeled, can be converted to a pandas data structure for cleaning, transformation, and analysis.
+
+
+### Key features
+    
+- Easy handling of **missing data**
+- **Size mutability**: columns can be inserted and deleted from DataFrame and higher dimensional objects
+- Automatic and explicit **data alignment**: objects can be explicitly aligned to a set of labels, or the data can be aligned automatically
+- Powerful, flexible **group by functionality** to perform split-apply-combine operations on data sets
+- Intelligent label-based **slicing, fancy indexing, and subsetting** of large data sets
+- Intuitive **merging and joining** data sets
+- Flexible **reshaping and pivoting** of data sets
+- **Hierarchical labeling** of axes
+- Robust **IO tools** for loading data from flat files, Excel files, databases, and HDF5
+- **Time series functionality**: date range generation and frequency conversion, moving window statistics, moving window linear regressions, date shifting and lagging, etc.
+<!-- #endregion -->
+
+### Series
+
+A **Series** is a single vector of data (like a NumPy array) with an *index* that labels each element in the vector.
+
+```{python editable=TRUE, slideshow={'slide_type': ''}}
+counts = pd.Series([632, 1638, 569, 115])
+counts
+```
+
+If an index is not specified, a default sequence of integers is assigned as the index. A NumPy array comprises the values of the `Series`, while the index is a pandas `Index` object.
+
+```{python editable=TRUE, slideshow={'slide_type': ''}}
+counts.values
+```
+
+```{python}
+counts.index
+```
+
+We can assign meaningful labels to the index, if they are available. These counts are of bacteria taxa constituting the microbiome of hospital patients, so using the taxon of each bacterium is a useful index.
+
+```{python}
+bacteria = pd.Series([632, 1638, 569, 115], 
+    index=['Firmicutes', 'Proteobacteria', 'Actinobacteria', 'Bacteroidetes'])
+
+bacteria
+```
+
+These labels can be used to refer to the values in the `Series`.
+
+```{python}
+bacteria['Actinobacteria']
+```
+
+```{python}
+bacteria[bacteria.index.str.endswith('bacteria')]
+```
+
+```{python}
+'Bacteroidetes' in bacteria
+```
+
+Notice that the indexing operation preserved the association between the values and the corresponding indices.
+
+We can still use positional indexing if we wish, although this will generate a warning since this feature will be deprecated in future.
+
+```{python}
+bacteria[0]
+```
+
+We can give both the array of values and the index meaningful labels themselves:
+
+```{python}
+bacteria.name = 'counts'
+bacteria.index.name = 'phylum'
+bacteria
+```
+
+NumPy's math functions and other operations can be applied to Series without losing the data structure.
+
+```{python}
+np.log(bacteria)
+```
+
+We can also filter according to the values in the `Series`:
+
+```{python}
+bacteria[bacteria>1000]
+```
+
+A `Series` can be thought of as an ordered key-value store. In fact, we can create one from a `dict`:
+
+```{python}
+bacteria_dict = {'Firmicutes': 632, 'Proteobacteria': 1638, 'Actinobacteria': 569, 'Bacteroidetes': 115}
+bact = pd.Series(bacteria_dict)
+```
+
+```{python}
+bact
+```
+
+Notice that the `Series` is created in key-sorted order.
+
+If we pass a custom index to `Series`, it will select the corresponding values from the dict, and treat indices without corrsponding values as missing. pandas uses the `NaN` (not a number) type for missing values.
+
+```{python}
+bacteria2 = pd.Series(bacteria_dict, 
+                      index=['Cyanobacteria','Firmicutes','Proteobacteria','Actinobacteria'])
+bacteria2
+```
+
+```{python}
+bacteria2.isnull()
+```
+
+Critically, the labels are used to **align data** when used in operations with other Series objects:
+
+```{python}
+bacteria + bacteria2
+```
+
+Contrast this with NumPy arrays, where arrays of the same length will combine values element-wise; adding Series combined values with the same label in the resulting series. Notice also that the missing values were propogated by addition.
+
+
+### DataFrame
+
+Inevitably, we want to be able to store, view and manipulate data that is *multivariate*, where for every index there are multiple fields or columns of data, often of varying data type.
+
+A `DataFrame` is a tabular data structure, encapsulating multiple series like columns in a spreadsheet. Data are stored internally as a 2-dimensional object, but the `DataFrame` allows us to represent and manipulate higher-dimensional data.
+
+```{python}
+bacteria_data = pd.DataFrame({'value':[632, 1638, 569, 115, 433, 1130, 754, 555],
+                     'patient':[1, 1, 1, 1, 2, 2, 2, 2],
+                     'phylum':['Firmicutes', 'Proteobacteria', 'Actinobacteria', 
+    'Bacteroidetes', 'Firmicutes', 'Proteobacteria', 'Actinobacteria', 'Bacteroidetes']})
+bacteria_data
+```
+
+Notice the `DataFrame` is sorted by column name. We can change the order by indexing them in the order we desire:
+
+```{python}
+bacteria_data[['phylum','value','patient']]
+```
+
+A `DataFrame` has a second index, representing the columns:
+
+```{python}
+bacteria_data.columns
+```
+
+If we wish to access columns, we can do so either by dict-like indexing or by attribute:
+
+```{python}
+bacteria_data['value']
+```
+
+```{python}
+bacteria_data.value
+```
+
+Using the standard indexing syntax for a single column of data from a `DataFrame` returns the column as a `Series`.
+
+```{python}
+type(bacteria_data['value'])
+```
+
+Passing the column name as a list returns the column as a `DataFrame` instead.
+
+```{python}
+bacteria_data[['value']]
+```
+
+Notice that indexing works differently with a `DataFrame` than with a `Series`, where in the latter, dict-like indexing retrieved a particular element (row). If we want access to a row in a `DataFrame`, we index its `loc` attribute.
+
+```{python}
+bacteria_data.loc[3]
+```
+
+Since a row potentially contains different data types, the returned `Series` of values is of the generic `object` type.
+
+
+### Exercise
+
+Try out these commands to see what they return:
+
+- data.head()
+- data.tail(3)
+- data.shape
+
+```{python}
+
+```
+
+If we want to create a `DataFrame` row-wise rather than column-wise, we can do so with a dict of dicts:
+
+```{python}
+bacteria_data = pd.DataFrame([{'patient': 1, 'phylum': 'Firmicutes', 'value': 632},
+                    {'patient': 1, 'phylum': 'Proteobacteria', 'value': 1638},
+                    {'patient': 1, 'phylum': 'Actinobacteria', 'value': 569},
+                    {'patient': 1, 'phylum': 'Bacteroidetes', 'value': 115},
+                    {'patient': 2, 'phylum': 'Firmicutes', 'value': 433},
+                    {'patient': 2, 'phylum': 'Proteobacteria', 'value': 1130},
+                    {'patient': 2, 'phylum': 'Actinobacteria', 'value': 754},
+                    {'patient': 2, 'phylum': 'Bacteroidetes', 'value': 555}])
+```
+
+```{python}
+bacteria_data
+```
+
+### Views
+
+Its important to note that the `Series` returned when a `DataFrame` is indexed is merely a **view** on the DataFrame, and not a copy of the data itself. So you must be *cautious* when manipulating this data.
+
+For example, let's isolate a column of our dataset by assigning it as a `Series` to a variable.
+
+```{python}
+vals = bacteria_data.value
+vals
+```
+
+Now, let's assign a new value to one of the elements of the `Series`.
+
+```{python}
+vals[5] = 0
+vals
+```
+
+However, we may not anticipate that the value in the original `DataFrame` has also been changed!
+
+```{python}
+bacteria_data
+```
+
+We can avoid this by working with a copy when modifying subsets of the original data.
+
+```{python}
+vals = bacteria_data.value.copy()
+vals[5] = 1000
+
+bacteria_data
+```
+
+So, as we have seen, we can create or modify columns by assignment; let's put back the value we accidentally changed.
+
+```{python}
+bacteria_data.value[5] = 1130
+```
+
+Or, we may wish to add a column representing the year the data were collected.
+
+```{python}
+bacteria_data['year'] = 2013
+bacteria_data
+```
+
+But note, we cannot use the attribute indexing method to add a new column:
+
+```{python}
+bacteria_data.treatment = 1
+bacteria_data
+```
+
+```{python}
+bacteria_data.treatment
+```
+
+### Auto-alignment
+
+When adding a column that is not a simple constant, we need to be a bit more careful. Due to pandas' auto-alignment behavior, specifying a `Series` as a new column causes its values to be added according to the `DataFrame`'s index:
+
+```{python}
+treatment = pd.Series([0]*4 + [1]*2)
+
+treatment
+```
+
+```{python}
+bacteria_data['treatment'] = treatment
+
+bacteria_data
+```
+
+Other Python data structures (ones without an index) need to be the same length as the `DataFrame`:
+
+```{python}
+month = ['Jan', 'Feb', 'Mar', 'Apr']
+bacteria_data['month'] = month
+```
+
+```{python}
+bacteria_data['month'] = ['Jan']*len(bacteria_data)
+
+bacteria_data
+```
+
+We can use `del` to remove columns, in the same way `dict` entries can be removed:
+
+```{python}
+del bacteria_data['month']
+
+bacteria_data
+```
+
+Or employ the `drop` method.
+
+```{python}
+bacteria_data.drop('treatment', axis=1)
+```
+
+We can extract the underlying data as a simple `ndarray` by accessing the `values` attribute:
+
+```{python}
+bacteria_data.values
+```
+
+Notice that because of the mix of string, integer and float (and `NaN`) values, the dtype of the array is `object`. The dtype will automatically be chosen to be as general as needed to accomodate all the columns.
+
+```{python}
+df = pd.DataFrame({'foo': [1,2,3], 'bar':[0.4, -1.0, 4.5]})
+
+df.values, df.values.dtype
+```
+
+pandas uses a custom data structure to represent the **indices** of Series and DataFrames.
+
+```{python}
+bacteria_data.index
+```
+
+Index objects are immutable:
+
+```{python}
+bacteria_data.index[0] = 15
+```
+
+This is so that Index objects can be shared between data structures without fear that they will be changed.
+
+```{python}
+bacteria2.index = bacteria.index
+
+bacteria2
+```
+
+### Excercise: Indexing
+
+From the `bacteria_data` table above, create an index to return all rows for which the phylum name ends in "bacteria" and the value is greater than 1000.
+
+```{python}
+# Write your answer here
+bacteria_data
+```
+
+```{python}
+bacteria_data['value']
+```
+
+```{python}
+bacteria_data[(bacteria_data['value'] > 1000) & (bacteria_data['phylum'].str.contains('bacteria'))]
+```
+
+# Using pandas
+
+This section, we will import and clean up some of the datasets that we will be using later on in the tutorial. And in doing so, we will introduce the key functionality of pandas that is required to use the software effectively.
+
+
+## Importing data
+
+A key, but often under-appreciated, step in data analysis is importing the data that we wish to analyze. Though it is easy to load basic data structures into Python using built-in tools or those provided by packages like NumPy, it is non-trivial to import structured data well, and to easily convert this input into a robust data structure:
+
+    genes = np.loadtxt("genes.csv", delimiter=",", dtype=[('gene', '|S10'), ('value', '<f4')])
+
+pandas provides a convenient set of functions for importing tabular data in a number of formats directly into a `DataFrame` object. These functions include a slew of options to perform type inference, indexing, parsing, iterating and cleaning automatically as data are imported.
+
+### Delimited data
+
+The file `olympics.1996.txt` in the `data` directory contains counts of medals awarded at the 1996 Summer Olympic Games by country, along with the countries' respective population sizes. This data is stored in a tab-separated format.
+
+![olympics](images/_olympics.png)
+
+```{python}
+# !head ../data/olympics.1996.txt
+```
+
+This table can be read into a DataFrame using `read_table`. 
+
+```{python}
+medals = pd.read_table('../data/olympics.1996.txt', sep='\t',
+                       index_col=0,
+                       header=None, names=['country', 'medals', 'population'])
+medals.head()
+```
+
+There is no header row in this dataset, so we specified this, and provided our own **header names**. If we did not specify `header=None` the function would have assumed the first row contained column names.
+
+The tab **separator** was passed to the `sep` argument as `\t`.
+
+The `sep` argument can be customized as needed to accomodate arbitrary separators. For example, we can use a regular expression to define a variable amount of whitespace, which is unfortunately common in some datasets: 
+    
+    sep='\s+'
+
+
+### Scraping Data from the Web
+
+We would like to add another variable to this dataset. Along with population, a country's economic development may be a useful predictor of Olympic success. A very simple indicator of this might be OECD membership status. 
+
+The [OECD website](http://www.oecd.org/about/membersandpartners/list-oecd-member-countries.htm) contains a table listing OECD member nations, along with its year of membership. We would like to import this table and extract the contries that were members as of the 1996 games.
+
+
+The `read_html` function accepts a URL argument, and will attempt to extract all the tables from that address, returning whatever it finds in a **list of `DataFrame`s**.
+
+```{python}
+oecd_site = 'https://web.archive.org/web/20170112202939/http://www.oecd.org/about/membersandpartners/list-oecd-member-countries.htm'
+pd.read_html(oecd_site)
+```
+
+There is typically some cleanup that is required of the returned data, such as the assignment of column names or conversion of types. 
+
+The table of interest is at index 1, and we will extract two columns from the table. Otherwise, this table is pretty clean.
+
+```{python}
+oecd = pd.read_html(oecd_site, header=0)[2][['Country', 'Date']][:35]
+#oecd = pd.read_html(oecd_site, header=1)[1][['Country', 'Date']]
+#oecd.head()
+oecd.head()
+```
+
+```{python}
+oecd['year'] = pd.to_datetime(oecd.Date).apply(lambda x: x.year)
+oecd_year = oecd.set_index(oecd.Country.str.title())['year'].dropna()
+oecd_year
+```
+
+We can create an indicator (binary) variable for OECD status by checking if each country is in the index of countries with membership year less than 1997. 
+
+The new `DataFrame` method `assign` is a convenient means for creating the new column from this operation.
+
+```{python}
+medals_data = medals.assign(oecd=medals.index.isin((oecd_year[oecd_year<1997]).index).astype(int))
+```
+
+Since the distribution of populations spans several orders of magnitude, we may wish to use the logarithm of the population size, which may be created similarly.
+
+```{python}
+medals_data = medals_data.assign(log_population=np.log(medals.population))
+```
+
+The NumPy `log` function will return a pandas `Series` (or `DataFrame` when applied to one) instead of a `ndarray`; all of NumPy's functions are compatible with pandas in this way.
+
+```{python}
+medals_data.head()
+```
+
+### Comma-separated Values (CSV)
+
+The most common form of delimited data is comma-separated values (CSV). Since CSV is so ubiquitous, the `read_csv` is available as a convenience function for `read_table`.
+
+Consider some more microbiome data.
+
+```{python}
+# !cat ../data/microbiome/microbiome.csv
+```
+
+This table can be read into a DataFrame using `read_csv`:
+
+```{python}
+mb = pd.read_csv("../data/microbiome/microbiome.csv")
+mb.head()
+```
+
+If we have sections of data that we do not wish to import (for example, known bad data), we can populate the `skiprows` argument:
+
+```{python}
+pd.read_csv("../data/microbiome/microbiome.csv", skiprows=[3,4,6]).head()
+```
+
+Conversely, if we only want to import a small number of rows from, say, a very large data file we can use `nrows`:
+
+```{python}
+few_recs = pd.read_csv("../data/microbiome/microbiome.csv", nrows=4)
+
+few_recs
+```
+
+Alternately, if we want to process our data in reasonable chunks, the `chunksize` argument will return an iterable object that can be employed in a data processing loop. For example, our microbiome data are organized by bacterial phylum, with 15 patients represented in each:
+
+```{python}
+data_chunks = pd.read_csv("../data/microbiome/microbiome.csv", chunksize=15)
+data_chunks
+```
+
+### Exercise: Calculating summary statistics
+
+Import the microbiome data, calculating the mean counts across all patients for each taxon, returning these values in a dictionary.
+
+*Hint: using `chunksize` makes this more efficent!*
+
+```{python}
+# Write your answer here
+```
+
+### Hierarchical Indices
+
+For a more useful index, we can specify the first two columns, which together provide a unique index to the data.
+
+```{python}
+mb = pd.read_csv("../data/microbiome/microbiome.csv", index_col=['Taxon','Patient'])
+mb.head()
+```
+
+This is called a **hierarchical index**, which allows multiple dimensions of data to be represented in tabular form.
+
+```{python}
+mb.index
+```
+
+The corresponding index is a `MultiIndex` object that consists of a sequence of tuples, the elements of which is some combination of the three columns used to create the index. Where there are multiple repeated values, pandas does not print the repeats, making it easy to identify groups of values.
+
+
+Rows can be indexed by passing the appropriate tuple.
+
+```{python}
+mb.loc[('Firmicutes', 2)]
+```
+
+With a hierachical index, we can select subsets of the data based on a *partial* index:
+
+```{python}
+mb.loc['Proteobacteria']
+```
+
+To extract arbitrary levels from a hierarchical row index, the **cross-section** method `xs` can be used.
+
+```{python}
+mb.xs(1, level='Patient')
+```
+
+We may also reorder levels as we like.
+
+```{python}
+mb.swaplevel('Patient', 'Taxon').head()
+```
+
+### Operations
+
+`DataFrame` and `Series` objects allow for several operations to take place either on a single object, or between two or more objects.
+
+For example, we can perform arithmetic on the elements of two objects, such as calculating the ratio of bacteria counts between locations:
+
+```{python}
+mb.Stool / mb.Tissue
+```
+
+### Microsoft Excel
+
+Since so much financial and scientific data ends up in Excel spreadsheets (regrettably), Pandas' ability to directly import Excel spreadsheets is valuable. This support is contingent on having one or two dependencies (depending on what version of Excel file is being imported) installed: `xlrd` and `openpyxl` (these may be installed with either `pip` or `easy_install`).
+
+The `read_excel` convenience function in pandas imports a specific sheet from an Excel file.
+
+```{python}
+mb = pd.read_excel('../data/microbiome/MID2.xls', sheet_name='Sheet 1', header=None)
+mb.head()
+```
+
+### Relational Databases
+
+If you are fortunate, your data will be stored in a database (relational or non-relational) rather than in arbitrary text files or spreadsheet. Relational databases are particularly useful for storing large quantities of *structured* data, where fields are grouped together in tables according to their relationships with one another.
+
+pandas' `DataFrame` interacts with relational (*i.e.* SQL) databases, and even provides facilties for using SQL syntax on the `DataFrame` itself, which we will get to later. For now, let's work with a ubiquitous embedded database called **SQLite**, which comes bundled with Python. A SQLite database can be queried with the standard library's `sqlite3` module.
+
+```{python}
+import sqlite3
+
+query = '''
+CREATE TABLE samples
+(taxon VARCHAR(15), patient INTEGER, tissue INTEGER, stool INTEGER);
+'''
+```
+
+This query string will create a table to hold some of our microbiome data, which we can execute after connecting to a database (which will be created, if it does not exist).
+
+```{python}
+con = sqlite3.connect('microbiome.sqlite3')
+con.execute(query)
+con.commit()
+```
+
+```{python}
+few_recs.iloc[0]
+```
+
+```{python}
+con.execute('INSERT INTO samples VALUES(\'{}\',{},{},{})'.format(*few_recs.iloc[0]))
+```
+
+```{python}
+query = 'INSERT INTO samples VALUES(?, ?, ?, ?)'
+con.executemany(query, few_recs.values[1:])
+```
+
+```{python}
+con.commit()
+```
+
+Using `SELECT` queries, we can read from the database.
+
+```{python}
+cursor = con.execute('SELECT * FROM samples')
+rows = cursor.fetchall()
+
+rows
+```
+
+These results can be passed directly to a `DataFrame`
+
+```{python}
+pd.DataFrame(rows)
+```
+
+To obtain the column names, we can obtain the table information from the database, via the special `PRAGMA` statement.
+
+```{python}
+table_info = con.execute('PRAGMA table_info(samples);').fetchall()
+
+table_info
+```
+
+```{python}
+pd.DataFrame(rows, columns=np.transpose(table_info)[1])
+```
+
+A more direct approach is to pass the query to the `read_sql_query` functon, which returns a populated `DataFrame.
+
+```{python}
+pd.read_sql_query('SELECT * FROM samples', con)
+```
+
+Correspondingly, we can append records into the database with `to_sql`.
+
+```{python}
+more_recs = pd.read_csv("../data/microbiome/microbiome_missing.csv").head(20)
+```
+
+```{python}
+more_recs.to_sql('samples', con, if_exists='append', index=False)
+```
+
+```{python}
+cursor = con.execute('SELECT * FROM samples')
+cursor.fetchall()
+```
+
+There are several other data formats that can be imported into Python and converted into DataFrames, with the help of buitl-in or third-party libraries. These include JSON, XML, HDF5, non-relational databases, and various web APIs.
+
+```{python}
+# Get rid of the database we created
+# !rm microbiome.sqlite3
+```
+
+## 2014 Ebola Outbreak Data
+
+The `../data/ebola` folder contains summarized reports of Ebola cases from three countries during the recent outbreak of the disease in West Africa. For each country, there are daily reports that contain various information about the outbreak in several cities in each country.
+
+![ebola](images/ebola.jpg)
+
+From these data files, use pandas to import them and create a single data frame that includes the **daily totals of new cases** for each country. 
+
+We may use this compiled data for more advaned applications later in the course.
+
+
+The data are taken from [Caitlin Rivers' `ebola` GitHub repository](https://github.com/cmrivers/ebola), and are licenced for both commercial and non-commercial use. The tutorial repository contains a subset of this data from three countries (Sierra Leone, Liberia and Guinea) that we will use as an example. They reside in a nested subdirectory in the `data` directory.
+
+```{python}
+# ebola_dirs = !ls ../data/ebola/
+ebola_dirs
+```
+
+Within each country directory, there are CSV files containing daily information regarding the state of the outbreak for that country. The first step is to efficiently import all the relevant files. 
+
+Our approach will be to construct a dictionary containing a list of filenames to import. We can use the `glob` package to identify all the CSV files in each directory. This can all be placed within a **dictionary comprehension**.
+
+```{python}
+import glob
+
+filenames = {data_dir[:data_dir.find('_')]: glob.glob('../data/ebola/{0}/*.csv'.format(data_dir)) for data_dir in ebola_dirs[1:]}
+```
+
+```{python}
+filenames
+```
+
+We are now in a position to iterate over the dictionary and import the corresponding files. However, the data layout of the files across the dataset is partially inconsistent.
+
+```{python}
+pd.read_csv('../data/ebola/sl_data/2014-08-12-v77.csv').head()
+```
+
+```{python}
+pd.read_csv('../data/ebola/guinea_data/2014-09-02.csv').head()
+```
+
+Clearly, we will need to develop row **masks** to extract the data we need across all files, without having to manually extract data from each file.
+
+Let's hack at one file to develop the mask.
+
+```{python}
+sample = pd.read_csv('../data/ebola/sl_data/2014-08-12-v77.csv')
+```
+
+To prevent issues with capitalization, we will simply revert all labels to lower case.
+
+```{python}
+lower_vars = sample.variable.str.lower()
+```
+
+Since we are interested in extracting new cases only, we can use the **string accessor** attribute to look for key words that we would like to include or exclude.
+
+```{python}
+case_mask = (lower_vars.str.contains('new') 
+             & (lower_vars.str.contains('case') | lower_vars.str.contains('suspect')) 
+             & ~lower_vars.str.contains('non')
+             & ~lower_vars.str.contains('total'))
+```
+
+We could have instead used regular expressions to do the same thing.
+
+Finally, we are only interested in three columns.
+
+```{python}
+sample.loc[case_mask, ['date', 'variable', 'National']]
+```
+
+We can now embed this operation in a loop over all the filenames in the database.
+
+```{python}
+datasets = []
+for country in filenames:
+    
+    country_files = filenames[country]
+    for f in country_files:
+        
+        data = pd.read_csv(f)
+        
+        
+        # Convert to lower case to avoid capitalization issues
+        data.columns = data.columns.str.lower()
+        # Column naming is inconsistent. These procedures deal with that.
+        keep_columns = ['date']
+        if 'description' in data.columns:
+            keep_columns.append('description')
+        else:
+            keep_columns.append('variable')
+            
+        if 'totals' in data.columns:
+            keep_columns.append('totals')
+        else:
+            keep_columns.append('national')
+            
+        # Index out the columns we need, and rename them
+        keep_data = data[keep_columns]
+        keep_data.columns = 'date', 'variable', 'totals'
+        
+        # Extract the rows we might want
+        lower_vars = keep_data.variable.str.lower()
+        # Of course we can also use regex to do this
+        case_mask = (lower_vars.str.contains('new') 
+                     & (lower_vars.str.contains('case') | lower_vars.str.contains('suspect') 
+                                                        | lower_vars.str.contains('confirm')) 
+                     & ~lower_vars.str.contains('non')
+                     & ~lower_vars.str.contains('total'))
+        
+        keep_data = keep_data[case_mask].dropna()
+        
+        # Convert data types
+        keep_data['date'] = pd.to_datetime(keep_data.date)
+        keep_data['totals'] = keep_data.totals.astype(int)
+        
+        # Assign country label and append to datasets list
+        datasets.append(keep_data.assign(country=country))
+        
+```
+
+Now that we have a list populated with `DataFrame` objects for each day and country, we can call `concat` to concatenate them into a single `DataFrame`.
+
+```{python}
+all_data = pd.concat(datasets)
+all_data.head()
+```
+
+This works because the structure of each table was identical
+
+
+### Manipulating indices
+
+Notice from above, however, that the index contains redundant integer index values. We can confirm this:
+
+```{python}
+all_data.index.is_unique
+```
+
+We can create a new unique index by calling the `reset_index` method on the new data frame after we import it, which will generate a new ordered, unique index.
+
+```{python}
+all_data = pd.concat(datasets).reset_index(drop=True)
+all_data.head()
+```
+
+**Reindexing** allows users to manipulate the data labels in a DataFrame. It forces a DataFrame to conform to the new index, and optionally, fill in missing data if requested.
+
+A simple use of `reindex` is to alter the order of the rows. For example, records are currently ordered first by country then by day, since this is the order in which they were iterated over and imported. We might arbitrarily want to reverse the order, which is performed by passing the appropriate index values to `reindex`.
+
+```{python}
+all_data.reindex(all_data.index[::-1])
+```
+
+Notice that the reindexing operation is not performed "in-place"; the original `DataFrame` remains as it was, and the method returns a copy of the `DataFrame` with the new index. This is a common trait for pandas, and is a Good Thing.
+
+We may also wish to reorder the columns this way.
+
+```{python}
+all_data.reindex(columns=['date', 'country', 'variable', 'totals']).head()
+```
+
+## Group by operations
+
+One of pandas' most powerful features is the ability to perform operations on subgroups of a `DataFrame`. These so-called **group by** operations defines subunits of the dataset according to the values of one or more variabes in the `DataFrame`.
+
+For this data, we want to sum the new case counts by day and country; so we pass these two column names to the `groupby` method, then sum the `totals` column accross them.
+
+```{python}
+all_data_grouped = all_data.groupby(['country', 'date'])
+daily_cases = all_data_grouped['totals'].sum()
+daily_cases.head(10)
+```
+
+The resulting series retains a hierarchical index from the group by operation. Hence, we can index out the counts for a given country on a particular day by indexing with the appropriate tuple.
+
+```{python}
+daily_cases[('liberia', '2014-09-02')]
+```
+
+One issue with the data we have extracted is that there appear to be serious **outliers** in the Liberian counts. The values are much too large to be a daily count, even during a serious outbreak.
+
+```{python}
+daily_cases.sort_values(ascending=False)
+daily_cases.head(10)
+```
+
+We can filter these outliers using an appropriate threshold.
+
+```{python}
+daily_cases = daily_cases[daily_cases<200]
+```
+
+## Plotting
+
+pandas data structures have high-level methods for creating a variety of plots, which tends to be easier than generating the corresponding plot using matplotlib. 
+
+For example, we may want to create a plot of the cumulative cases for each of the three countries. The easiest way to do this is to remove the hierarchical index, and create a `DataFrame` of three columns, which will result in three lines when plotted.
+
+First, call `unstack` to remove the hierarichical index:
+
+```{python}
+daily_cases.unstack().head()
+```
+
+Next, transpose the resulting `DataFrame` to swap the rows and columns.
+
+```{python}
+daily_cases.unstack().T.head()
+```
+
+Since we have missing values for some dates, we will assume that the counts for those days were zero (the actual counts for that day may have bee included in the next reporting day's data).
+
+```{python}
+daily_cases.unstack().T.fillna(0).head()
+```
+
+Finally, calculate the cumulative sum for all the columns, and generate a line plot, which we get by default.
+
+```{python}
+daily_cases.unstack().T.fillna(0).cumsum().plot()
+```
+
+## Resampling
+
+An alternative to filling days without case reports with zeros is to aggregate the data at a coarser time scale. New cases are often reported by week; we can use the `resample` method to summarize the data into weekly values.
+
+```{python}
+weekly_cases = daily_cases.unstack().T.resample('W').sum()
+weekly_cases
+```
+
+```{python}
+weekly_cases.cumsum().plot()
+```
+
+## Writing Data to Files
+
+As well as being able to read several data input formats, pandas can also export data to a variety of storage formats. We will bring your attention to just one of these, but the usage is similar across formats.
+
+```{python}
+medals_data.to_csv("../data/medals.csv", index=False)
+```
+
+The `to_csv` method writes a `DataFrame` to a comma-separated values (csv) file. You can specify custom delimiters (via `sep` argument), how missing values are written (via `na_rep` argument), whether the index is writen (via `index` argument), whether the header is included (via `header` argument), among other options.
+
+
+## Missing data
+
+The occurence of missing data is so prevalent that it pays to use tools like pandas, which seamlessly integrates missing data handling so that it can be dealt with easily, and in the manner required by the analysis at hand.
+
+Missing data are represented in `Series` and `DataFrame` objects by the `NaN` floating point value. However, `None` is also treated as missing, since it is commonly used as such in other contexts (*e.g.* NumPy).
+
+```{python}
+# !head -n 20 ../data/microbiome/microbiome_missing.csv
+```
+
+```{python}
+pd.read_csv("../data/microbiome/microbiome_missing.csv").head(20)
+```
+
+Above, pandas recognized `NA` and an empty field as missing data.
+
+```{python}
+pd.isnull(pd.read_csv("../data/microbiome/microbiome_missing.csv")).head(20)
+```
+
+Unfortunately, there will sometimes be inconsistency with the conventions for missing data. In this example, there is a question mark "?" and a large negative number where there should have been a positive integer. We can specify additional symbols with the `na_values` argument:
+   
+
+```{python}
+missing_sample = pd.read_csv("../data/microbiome/microbiome_missing.csv", 
+                             na_values=['?', -99999], nrows=20)
+
+missing_sample
+```
+
+These can be specified on a column-wise basis using an appropriate dict as the argument for `na_values`.
+
+
+By default, `dropna` drops entire rows in which one or more values are missing.
+
+```{python}
+missing_sample.dropna()
+```
+
+If we want to drop missing values column-wise instead of row-wise, we use `axis=1`.
+
+```{python}
+missing_sample.dropna(axis=1)
+```
+
+Rather than omitting missing data from an analysis, in some cases it may be suitable to fill the missing value in, either with a default value (such as zero), a sentinel value, or a value that is either imputed or carried forward/backward from similar data points. We can do this programmatically in pandas with the `fillna` argument.
+
+```{python}
+missing_sample.fillna(-999)
+```
+
+Sentinel values are useful in pandas because missing values are treated as floats, so it is impossible to use explicit missing values with integer columns. Using some large (positive or negative) integer as a sentinel value will allow the column to be integer typed.
+
+
+### Exercise: Mean imputation
+
+Fill the missing values in `missing_sample` with the mean count from the corresponding species across patients.
+
+```{python}
+## Write your answer here 
+```
